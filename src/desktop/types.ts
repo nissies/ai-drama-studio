@@ -23,6 +23,12 @@ export interface DesktopBridge {
   savePersistedAuthState(input: PersistedAuthState): Promise<void>
   clearPersistedAuthState(): Promise<void>
   getRuntimeStatus(): Promise<DesktopRuntimeStatus>
+  getOptionalRuntimeAsset(id: string): Promise<DesktopRuntimeAssetStatus>
+  installOptionalRuntimeAsset(id: string): Promise<DesktopRuntimeAssetStatus>
+  cancelOptionalRuntimeAsset(id: string): Promise<boolean>
+  removeOptionalRuntimeAsset(id: string): Promise<DesktopRuntimeAssetStatus>
+  onRuntimeAssetProgress(callback: (progress: DesktopRuntimeAssetProgress) => void): () => void
+  runtimeAssetUrl(id: string): string
   checkForUpdate(input?: {
     currentVersion?: string
     channel?: string
@@ -478,6 +484,27 @@ export interface DesktopRuntimeStatus {
     executable: string
     version: string | null
   }
+  optionalAssets: DesktopRuntimeAssetStatus[]
+}
+
+export type DesktopRuntimeAssetState = 'NOT_INSTALLED' | 'CORRUPT' | 'READY'
+export interface DesktopRuntimeAssetStatus {
+  id: string
+  label: string
+  version: string
+  state: DesktopRuntimeAssetState
+  sizeBytes: number
+  sha256: string
+  sourceUrl: string
+  license: string
+}
+export interface DesktopRuntimeAssetProgress {
+  id: string
+  stage: 'DOWNLOADING' | 'VERIFYING' | 'SUCCEEDED'
+  progress: number
+  receivedBytes: number
+  totalBytes: number
+  status?: DesktopRuntimeAssetStatus
 }
 
 export interface DesktopWorkspaceStatus {

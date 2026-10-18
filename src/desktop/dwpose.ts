@@ -24,8 +24,6 @@ const RIGHT_HAND_KEYPOINT_OFFSET = 112
 const HAND_KEYPOINT_COUNT = 21
 const BODY_VISIBILITY_THRESHOLD = 0.12
 const DETECTION_VISIBILITY_THRESHOLD = 0.08
-const MODEL_URL = new URL('dwpose/dw-ll_ucoco_384.onnx', document.baseURI).toString()
-
 let sessionPromise: Promise<ort.InferenceSession> | null = null
 let extractionActive = false
 
@@ -161,7 +159,13 @@ async function inferFrame(
 async function loadSession(): Promise<ort.InferenceSession> {
   if (!sessionPromise) {
     ort.env.wasm.numThreads = 1
-    sessionPromise = ort.InferenceSession.create(MODEL_URL, {
+    const bridge = globalThis.window?.aiDramaDesktop
+    if (!bridge) throw new Error('DWPose 姿态模型仅支持 Windows 客户端')
+    const model = await bridge.getOptionalRuntimeAsset('dwpose-model')
+    if (model.state !== 'READY') {
+      throw new Error('尚未安装 DWPose 姿态模型，请先在“设置”中下载安装')
+    }
+    sessionPromise = ort.InferenceSession.create(bridge.runtimeAssetUrl('dwpose-model'), {
       executionProviders: ['wasm'],
       graphOptimizationLevel: 'all',
     }).catch((error) => {

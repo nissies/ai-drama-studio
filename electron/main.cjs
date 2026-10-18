@@ -11,6 +11,7 @@ const {
   dialog,
   ipcMain,
   Menu,
+  net,
   protocol,
   safeStorage,
   shell,
@@ -35,6 +36,7 @@ const { LocalChatStore } = require('./local-chat-store.cjs')
 const { runtimeConfig } = require('./runtime-config.cjs')
 const { DesktopUpdaterService } = require('./desktop-updater.cjs')
 const { AuthStateService } = require('./auth-state.cjs')
+const { OptionalRuntimeAssetService } = require('./optional-runtime-assets.cjs')
 
 const execFileAsync = promisify(execFile)
 const isDevelopment = process.argv.includes('--dev')
@@ -54,6 +56,7 @@ let audioExtractor
 let poseProxyRenderer
 let desktopUpdater
 let authState
+let runtimeAssets
 const protocolRequests = []
 const rendererErrors = []
 
@@ -65,6 +68,10 @@ protocol.registerSchemesAsPrivileged([
   },
   {
     scheme: 'aidrama-asset',
+    privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true },
+  },
+  {
+    scheme: 'aidrama-runtime',
     privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true },
   },
 ])
@@ -109,12 +116,17 @@ app.whenReady().then(async () => {
     appDataPath: app.getPath('userData'),
     encryption: createSafeStorageEncryption(safeStorage),
   })
+  runtimeAssets = new OptionalRuntimeAssetService({
+    appDataPath: app.getPath('userData'),
+    fetchImpl: net.fetch,
+  })
   poseProxyRenderer = new PoseProxyRenderer({
     appDataPath: app.getPath('userData'),
     ffmpegPath: await resolveMediaExecutable('ffmpeg'),
   })
   if (!isDevelopment) registerAppProtocol()
   registerAssetProtocol()
+  registerRuntimeAssetProtocol()
   registerIpcHandlers()
   await createMainWindow()
 
@@ -195,7 +207,7 @@ function registerAppProtocol() {
           'content-type': contentTypeFor(filePath),
           ...(path.extname(filePath).toLowerCase() === '.html'
             ? {
-                'content-security-policy': `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: aidrama-asset:; media-src 'self' blob: aidrama-asset:; connect-src 'self' aidrama-asset: ${apiOrigin}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`,
+                'content-security-policy': `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: aidrama-asset:; media-src 'self' blob: aidrama-asset:; connect-src 'self' aidrama-asset: aidrama-runtime: ${apiOrigin}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`,
               }
             : {}),
         },
@@ -263,6 +275,29 @@ function registerAssetProtocol() {
   })
 }
 
+function registerRuntimeAssetProtocol() {
+  protocol.handle('aidrama-runtime', async (request) => {
+    if (!['GET', 'HEAD'].includes(request.method)) {
+      return new Response('Method not allowed', { status: 405 })
+    }
+    const requestUrl = new URL(request.url)
+    if (requestUrl.hostname !== 'asset') return new Response('Not found', { status: 404 })
+    const parts = requestUrl.pathname.split('/').filter(Boolean).map(decodeURIComponent)
+    if (parts.length !== 1) return new Response('Not found', { status: 404 })
+    const filePath = await runtimeAssets.resolve(parts[0]).catch(() => null)
+    if (!filePath) return new Response('Runtime asset not installed', { status: 404 })
+    const stat = await fs.stat(filePath)
+    const headers = {
+      'content-type': 'application/octet-stream',
+      'content-length': String(stat.size),
+      'cache-control': 'private, immutable, max-age=31536000',
+      'x-content-type-options': 'nosniff',
+    }
+    if (request.method === 'HEAD') return new Response(null, { status: 200, headers })
+    return new Response(Readable.toWeb(createReadStream(filePath)), { status: 200, headers })
+  })
+}
+
 async function writeDebugSnapshot() {
   const output = process.env.AI_DRAMA_DESKTOP_DEBUG_LOG
   if (!output) return
@@ -312,7 +347,18 @@ function registerIpcHandlers() {
     platform: process.platform,
     appVersion: app.getVersion(),
     ffmpeg: await detectFfmpeg(),
+    optionalAssets: [await runtimeAssets.status('dwpose-model')],
   }))
+  handle('desktop:get-optional-runtime-asset', (id) => runtimeAssets.status(id))
+  handle('desktop:install-optional-runtime-asset', (id) =>
+    runtimeAssets.install(id, (progress) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('desktop:runtime-asset-progress', progress)
+      }
+    }),
+  )
+  handle('desktop:cancel-optional-runtime-asset', (id) => runtimeAssets.cancel(id))
+  handle('desktop:remove-optional-runtime-asset', (id) => runtimeAssets.remove(id))
   handle('desktop:check-for-update', async (input) => {
     const updater = ensureDesktopUpdater()
     return updater.checkForUpdate(input || {})

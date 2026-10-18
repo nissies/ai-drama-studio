@@ -15,6 +15,7 @@
 - Windows `safeStorage` 加密保存模型 API Key
 - 生成结果下载到本地项目目录
 - 使用 FFmpeg 进行抽帧、音频处理和成片合成
+- 可在设置页按需安装经过 SHA-256 校验的 DWPose 姿态模型
 
 云端登录、积分、平台模型和自动更新属于可选集成功能，需要自行提供兼容后端；
 本地项目和“我的 API”模型生成不需要该后端。
@@ -51,6 +52,10 @@ npm run desktop:dev
 
 建议先使用“测试连接”或“获取模型列表”验证配置，再进入图片工坊或视频工坊。
 
+动作代理是可选功能。需要时进入“设置 → 可选姿态模型”，点击“下载并安装”；
+模型从标注为 Apache-2.0 的官方 DWPose Hugging Face 仓库下载，校验通过后保存在
+当前 Windows 用户数据目录，不会写入项目仓库或工作目录。
+
 ## 常用命令
 
 ```powershell
@@ -78,8 +83,8 @@ npm run desktop:package
 
 ## 第三方资源
 
-仓库不包含 FFmpeg 可执行文件、134MB DWPose 模型以及复制的 WASM 运行时。
-基础文本、图片、视频、配音生成不依赖 DWPose 模型。详情见
+仓库不包含 FFmpeg 可执行文件或 134MB DWPose 模型。发布的 Windows 安装包包含
+FFmpeg；DWPose 在设置页按需下载。基础文本、图片、视频、配音生成不依赖它。详情见
 [THIRD_PARTY_ASSETS.md](THIRD_PARTY_ASSETS.md)。
 
 ## 许可证

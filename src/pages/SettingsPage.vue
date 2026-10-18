@@ -32,6 +32,8 @@ import type {
   LocalAiConnectivityResult,
   DesktopUpdateCheckResult,
   DesktopUpdateProgress,
+  DesktopRuntimeAssetProgress,
+  DesktopRuntimeAssetStatus,
 } from '../desktop/types'
 import StudioShell from '../layouts/StudioShell.vue'
 import { useRouter } from 'vue-router'
@@ -211,6 +213,13 @@ const ffmpegRuntimeHint = computed(
     ffmpegRuntime.value?.version ||
     (desktop.available ? '请安装 FFmpeg 或使用内置运行库' : '仅 Windows 客户端可调用'),
 )
+const poseAsset = computed(
+  () => desktop.runtime?.optionalAssets?.find((item) => item.id === 'dwpose-model') ?? null,
+)
+const poseAssetBusy = ref(false)
+const poseAssetError = ref('')
+const poseAssetNotice = ref('')
+const poseAssetProgress = ref<DesktopRuntimeAssetProgress | null>(null)
 
 watch(
   () => form.serviceType,
@@ -239,6 +248,7 @@ const updateNotice = ref('')
 const updateCheck = ref<DesktopUpdateCheckResult | null>(null)
 const updateProgress = ref<DesktopUpdateProgress | null>(null)
 let stopUpdateProgress: (() => void) | null = null
+let stopRuntimeAssetProgress: (() => void) | null = null
 onMounted(async () => {
   await desktop.initialize()
   if (auth.isAuthenticated) await loadPlatformModels()
@@ -250,6 +260,11 @@ onMounted(async () => {
         updateProgress.value = progress
       })
     }
+    if (bridge?.onRuntimeAssetProgress) {
+      stopRuntimeAssetProgress = bridge.onRuntimeAssetProgress((progress) => {
+        if (progress.id === 'dwpose-model') poseAssetProgress.value = progress
+      })
+    }
     void checkForAppUpdate(true)
   }
 })
@@ -257,7 +272,56 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   stopUpdateProgress?.()
   stopUpdateProgress = null
+  stopRuntimeAssetProgress?.()
+  stopRuntimeAssetProgress = null
 })
+
+function updatePoseAsset(status: DesktopRuntimeAssetStatus) {
+  if (!desktop.runtime) return
+  desktop.runtime.optionalAssets = [
+    ...(desktop.runtime.optionalAssets || []).filter((item) => item.id !== status.id),
+    status,
+  ]
+}
+
+async function installPoseAsset() {
+  const bridge = window.aiDramaDesktop
+  if (!bridge || poseAssetBusy.value) return
+  poseAssetBusy.value = true
+  poseAssetError.value = ''
+  poseAssetNotice.value = '正在从官方来源下载并校验模型…'
+  try {
+    updatePoseAsset(await bridge.installOptionalRuntimeAsset('dwpose-model'))
+    poseAssetNotice.value = 'DWPose 姿态模型已安装，可以使用动作代理功能'
+  } catch (error) {
+    poseAssetError.value = error instanceof Error ? error.message : '模型安装失败'
+    poseAssetNotice.value = ''
+  } finally {
+    poseAssetBusy.value = false
+    poseAssetProgress.value = null
+  }
+}
+
+async function cancelPoseAssetInstall() {
+  const canceled = await window.aiDramaDesktop?.cancelOptionalRuntimeAsset('dwpose-model')
+  if (canceled) poseAssetNotice.value = '正在取消下载…'
+}
+
+async function removePoseAsset() {
+  const bridge = window.aiDramaDesktop
+  if (!bridge || poseAssetBusy.value) return
+  if (!window.confirm('删除 DWPose 姿态模型？普通图片、视频生成和本地项目不会受影响。')) return
+  poseAssetBusy.value = true
+  poseAssetError.value = ''
+  try {
+    updatePoseAsset(await bridge.removeOptionalRuntimeAsset('dwpose-model'))
+    poseAssetNotice.value = '姿态模型已删除'
+  } catch (error) {
+    poseAssetError.value = error instanceof Error ? error.message : '模型删除失败'
+  } finally {
+    poseAssetBusy.value = false
+  }
+}
 
 async function checkForAppUpdate(silent = false) {
   if (!desktop.available || updateChecking.value || updateInstalling.value) return
@@ -701,6 +765,82 @@ function messageFor(error: unknown, fallback: string) {
             </div>
             <ChevronRight :size="17" />
           </div>
+        </div>
+      </section>
+
+      <section class="runtime-panel optional-runtime-panel">
+        <header>
+          <div>
+            <h2>可选姿态模型</h2>
+            <p>仅动作代理需要；文本、图片、视频和配音模型配置不受影响</p>
+          </div>
+          <strong
+            class="runtime-status"
+            :class="{ ready: poseAsset?.state === 'READY' }"
+          >
+            <CheckCircle2 v-if="poseAsset?.state === 'READY'" :size="16" />
+            <TriangleAlert v-else :size="16" />
+            {{
+              poseAsset?.state === 'READY'
+                ? '已安装'
+                : poseAsset?.state === 'CORRUPT'
+                  ? '校验失败'
+                  : '未安装'
+            }}
+          </strong>
+        </header>
+        <p v-if="poseAssetNotice" class="inline-success" role="status">{{ poseAssetNotice }}</p>
+        <p v-if="poseAssetError" class="inline-error" role="alert">{{ poseAssetError }}</p>
+        <div class="optional-runtime-card">
+          <div>
+            <strong>{{ poseAsset?.label || 'DWPose 姿态模型' }}</strong>
+            <span>
+              {{ formatUpdateBytes(poseAsset?.sizeBytes) }} · {{ poseAsset?.license || 'Apache-2.0' }}
+              · 下载后保存在当前用户数据目录
+            </span>
+            <a
+              v-if="poseAsset?.sourceUrl"
+              :href="poseAsset.sourceUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+            >查看官方来源与许可证</a>
+          </div>
+          <div class="optional-runtime-actions">
+            <button
+              v-if="poseAsset?.state !== 'READY'"
+              class="button primary"
+              type="button"
+              :disabled="!desktop.available || poseAssetBusy"
+              @click="installPoseAsset"
+            >
+              <Download :size="16" />
+              {{ poseAssetBusy ? '下载安装中…' : poseAsset?.state === 'CORRUPT' ? '重新安装' : '下载并安装' }}
+            </button>
+            <button
+              v-if="poseAssetBusy"
+              class="button"
+              type="button"
+              @click="cancelPoseAssetInstall"
+            >取消</button>
+            <button
+              v-if="poseAsset?.state === 'READY'"
+              class="button danger-text"
+              type="button"
+              :disabled="poseAssetBusy"
+              @click="removePoseAsset"
+            >
+              <Trash2 :size="16" /> 删除模型
+            </button>
+          </div>
+        </div>
+        <div v-if="poseAssetProgress" class="runtime-download-progress" role="status">
+          <progress :value="poseAssetProgress.progress" max="100" />
+          <span>
+            {{ poseAssetProgress.stage === 'VERIFYING' ? '正在校验 SHA-256' : '正在下载' }}
+            · {{ poseAssetProgress.progress }}%
+            · {{ formatUpdateBytes(poseAssetProgress.receivedBytes) }} /
+            {{ formatUpdateBytes(poseAssetProgress.totalBytes) }}
+          </span>
         </div>
       </section>
 

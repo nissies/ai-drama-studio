@@ -5,6 +5,19 @@ contextBridge.exposeInMainWorld(
   Object.freeze({
     isDesktop: true,
     getRuntimeStatus: () => ipcRenderer.invoke('desktop:get-runtime-status'),
+    getOptionalRuntimeAsset: (id) => ipcRenderer.invoke('desktop:get-optional-runtime-asset', id),
+    installOptionalRuntimeAsset: (id) =>
+      ipcRenderer.invoke('desktop:install-optional-runtime-asset', id),
+    cancelOptionalRuntimeAsset: (id) =>
+      ipcRenderer.invoke('desktop:cancel-optional-runtime-asset', id),
+    removeOptionalRuntimeAsset: (id) =>
+      ipcRenderer.invoke('desktop:remove-optional-runtime-asset', id),
+    onRuntimeAssetProgress: (callback) => {
+      const listener = (_event, progress) => callback(progress)
+      ipcRenderer.on('desktop:runtime-asset-progress', listener)
+      return () => ipcRenderer.removeListener('desktop:runtime-asset-progress', listener)
+    },
+    runtimeAssetUrl: (id) => `aidrama-runtime://asset/${encodeURIComponent(id)}`,
     checkForUpdate: (input) => ipcRenderer.invoke('desktop:check-for-update', input),
     downloadAndInstallUpdate: (input) =>
       ipcRenderer.invoke('desktop:download-and-install-update', input),
