@@ -1,0 +1,51 @@
+{
+  "name": "ai-drama-studio",
+  "description": "本地优先的 AI 短剧创作 Windows 桌面端",
+  "author": "移光科技",
+  "private": true,
+  "version": "0.4.5",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "desktop:dev": "electron . --dev",
+    "lint": "eslint .",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run",
+    "test:desktop": "node --test electron/*.test.cjs",
+    "build": "vite build",
+    "build:desktop": "vite build --mode desktop",
+    "desktop:runtime:verify": "node scripts/verify-ffmpeg-runtime.cjs",
+    "desktop:package": "npm run build:desktop && npm run desktop:runtime:verify && electron-builder --win --x64",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^1.0.1",
+    "lucide-vue-next": "^0.511.0",
+    "onnxruntime-web": "^1.27.0",
+    "pinia": "^3.0.3",
+    "qrcode": "^1.5.4",
+    "sharp": "^0.35.5",
+    "vue": "^3.5.44",
+    "vue-router": "^4.5.1"
+  },
+  "devDependencies": {
+    "@babel/parser": "^7.29.7",
+    "@eslint/js": "^9.30.1",
+    "@types/node": "^22.15.30",
+    "@types/qrcode": "^1.5.6",
+    "@vitejs/plugin-vue": "^6.0.0",
+    "@vitest/coverage-v8": "^3.2.4",
+    "electron": "^43.1.0",
+    "electron-builder": "^26.15.3",
+    "eslint": "^9.30.1",
+    "eslint-plugin-vue": "^10.2.0",
+    "jsdom": "^26.1.0",
+    "prettier": "^3.6.2",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.35.1",
+    "vite": "^7.0.0",
+    "vitest": "^3.2.4",
+    "vue-tsc": "^2.2.10"
+  }
+}

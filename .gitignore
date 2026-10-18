@@ -1,0 +1,23 @@
+node_modules/
+dist/
+release/
+.npm-cache/
+.env
+.env.*
+!.env.example
+*.log
+*.pid
+*.err
+*.out
+
+# Third-party runtimes and models are installed separately.
+build/ffmpeg/*.exe
+public/dwpose/*.onnx
+public/mediapipe/
+public/onnxruntime/
+
+# Local editor and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

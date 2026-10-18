@@ -1,0 +1,36 @@
+appId: com.aidrama.studio
+productName: 移光漫剧工坊
+artifactName: Yiguang-Manju-Studio-${version}-${arch}.${ext}
+directories:
+  output: release
+  buildResources: build
+electronDist: node_modules/electron/dist
+files:
+  - dist/**/*
+  - electron/**/*
+  - package.json
+extraResources:
+  - from: build/ffmpeg
+    to: ffmpeg
+    filter:
+      - '**/*'
+asar: true
+asarUnpack:
+  - '**/*.node'
+  - '**/sharp/**'
+  - '**/@img/**'
+win:
+  signAndEditExecutable: false
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.ico
+nsis:
+  include: build/installer.nsh
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: 移光漫剧工坊
