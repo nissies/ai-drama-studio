@@ -2,7 +2,7 @@
 
 ## Current phase
 
-Public repository candidate ready for final Git/GitHub publication checks.
+Published as a public repository at https://github.com/nissies/ai-drama-studio.
 
 ## Completed
 
@@ -16,7 +16,7 @@ Public repository candidate ready for final Git/GitHub publication checks.
 
 ## In progress
 
-- Final tracked-file review, first commit and GitHub publication.
+- Monitor the first GitHub Actions CI run.
 
 ## Known limitations and risks
 
